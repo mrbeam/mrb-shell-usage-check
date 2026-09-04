@@ -57,8 +57,17 @@ def _iter_python_files(path):
         yield candidate
 
 
+def _relative_path(path, base_dir):
+    try:
+        return path.relative_to(base_dir)
+    except ValueError:
+        return path
+
+
 def scan_file(path):
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    source_lines = source.splitlines()
     findings = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -68,31 +77,35 @@ def scan_file(path):
         if callee not in DISALLOWED_CALLEES:
             continue
 
+        line_text = source_lines[node.lineno - 1].strip() if node.lineno <= len(source_lines) else ""
+
         if callee in OS_SHELL_CALLEES:
-            findings.append((node.lineno, f"{callee[0]}.{callee[1]} is always shell-backed"))
+            findings.append((node.lineno, f"{callee[0]}.{callee[1]} is always shell-backed", line_text))
 
         if any(_is_shell_true(keyword) for keyword in node.keywords):
-            findings.append((node.lineno, "shell=True"))
+            findings.append((node.lineno, "shell=True", line_text))
 
         if node.args and callee in SUBPROCESS_CALLEES and _is_string_command(node.args[0]):
-            findings.append((node.lineno, "string command instead of argv"))
+            findings.append((node.lineno, "string command instead of argv", line_text))
 
         if node.args and _is_dynamic_command(node.args[0]):
-            findings.append((node.lineno, "dynamic command construction"))
+            findings.append((node.lineno, "dynamic command construction", line_text))
     return findings
 
 
-def scan_paths(paths):
+def scan_paths(paths, base_dir=None):
     files = []
     for path in paths:
         files.extend(_iter_python_files(path.resolve()))
 
     findings = []
     seen = set()
+    root = Path.cwd() if base_dir is None else Path(base_dir).resolve()
     for path in files:
         if path in seen:
             continue
         seen.add(path)
-        for lineno, message in scan_file(path):
-            findings.append(f"{path}:{lineno}: {message}")
+        display_path = _relative_path(path, root)
+        for lineno, message, line_text in scan_file(path):
+            findings.append(f"{display_path}:{lineno}: {message}\n    {line_text}")
     return findings

@@ -5,6 +5,9 @@ from pathlib import Path
 from .scanner import scan_paths
 
 
+SUCCESS_MESSAGE = "Shell usage check passed."
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="mrb-shell-usage-check",
@@ -24,7 +27,7 @@ def main(argv=None):
         print("\n".join(findings))
         return 1
 
-    print("Shell usage check passed.")
+    print(SUCCESS_MESSAGE)
     return 0
 
 
