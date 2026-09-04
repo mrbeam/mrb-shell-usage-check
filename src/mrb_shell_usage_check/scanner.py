@@ -10,6 +10,11 @@ DISALLOWED_CALLEES = {
     ("os", "system"),
     ("os", "popen"),
 }
+OS_SHELL_CALLEES = {
+    ("os", "system"),
+    ("os", "popen"),
+}
+SUBPROCESS_CALLEES = DISALLOWED_CALLEES - OS_SHELL_CALLEES
 IGNORED_DIR_NAMES = {".git", ".venv", "venv", "node_modules", "build", "dist"}
 
 
@@ -31,6 +36,10 @@ def _is_dynamic_command(arg):
     return isinstance(
         arg, (ast.JoinedStr, ast.BinOp, ast.Call, ast.Subscript, ast.Attribute)
     )
+
+
+def _is_string_command(arg):
+    return isinstance(arg, ast.Constant) and isinstance(arg.value, str)
 
 
 def _iter_python_files(path):
@@ -59,8 +68,15 @@ def scan_file(path):
         if callee not in DISALLOWED_CALLEES:
             continue
 
+        if callee in OS_SHELL_CALLEES:
+            findings.append((node.lineno, f"{callee[0]}.{callee[1]} is always shell-backed"))
+
         if any(_is_shell_true(keyword) for keyword in node.keywords):
             findings.append((node.lineno, "shell=True"))
+
+        if node.args and callee in SUBPROCESS_CALLEES and _is_string_command(node.args[0]):
+            findings.append((node.lineno, "string command instead of argv"))
+
         if node.args and _is_dynamic_command(node.args[0]):
             findings.append((node.lineno, "dynamic command construction"))
     return findings

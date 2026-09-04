@@ -20,6 +20,26 @@ def test_scan_file_flags_shell_true_and_dynamic_commands(tmp_path):
     ]
 
 
+def test_scan_file_flags_string_subprocess_commands(tmp_path):
+    sample = tmp_path / "sample.py"
+    sample.write_text(
+        "import subprocess\nsubprocess.check_output('echo ok')\n",
+        encoding="utf-8",
+    )
+
+    assert scan_file(sample) == [(2, "string command instead of argv")]
+
+
+def test_scan_file_flags_os_system_even_with_literal_command(tmp_path):
+    sample = tmp_path / "sample.py"
+    sample.write_text(
+        "import os\nos.system('echo ok')\n",
+        encoding="utf-8",
+    )
+
+    assert scan_file(sample) == [(2, "os.system is always shell-backed")]
+
+
 def test_scan_paths_walks_directories(tmp_path):
     package = tmp_path / "pkg"
     package.mkdir()
