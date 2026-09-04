@@ -1,0 +1,6 @@
+- id: mrb-shell-usage-check
+  name: mrb shell usage check
+  entry: mrb-shell-usage-check
+  language: python
+  types: [python]
+  pass_filenames: true

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mrb-shell-usage-check"
+version = "0.1.0"
+description = "Detect unsafe shell command construction in Python code"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "Mr Beam"}]
+license = {text = "Proprietary"}
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.scripts]
+mrb-shell-usage-check = "mrb_shell_usage_check.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
