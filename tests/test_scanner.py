@@ -76,3 +76,21 @@ def test_scan_paths_includes_relative_file_and_source_context(tmp_path):
     assert findings == [
         "pkg/sample.py:2: os.system is always shell-backed\n    os.system('echo ok')"
     ]
+
+
+def test_scan_paths_respects_ignore_patterns(tmp_path):
+    included = tmp_path / "pkg" / "sample.py"
+    included.parent.mkdir(parents=True)
+    included.write_text("import os\nos.system('echo ok')\n", encoding="utf-8")
+    ignored = tmp_path / "versioneer.py"
+    ignored.write_text("import os\nos.system('echo ok')\n", encoding="utf-8")
+
+    findings = scan_paths(
+        [tmp_path],
+        base_dir=tmp_path,
+        ignore_patterns=[r"^versioneer\\.py$"],
+    )
+
+    assert findings == [
+        "pkg/sample.py:2: os.system is always shell-backed\n    os.system('echo ok')"
+    ]

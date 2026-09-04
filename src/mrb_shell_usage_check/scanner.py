@@ -1,4 +1,5 @@
 import ast
+import re
 from pathlib import Path
 
 DISALLOWED_CALLEES = {
@@ -42,9 +43,23 @@ def _is_string_command(arg):
     return isinstance(arg, ast.Constant) and isinstance(arg.value, str)
 
 
-def _iter_python_files(path):
+def _relative_path(path, base_dir):
+    try:
+        return path.relative_to(base_dir)
+    except ValueError:
+        return path
+
+
+def _should_ignore(path, base_dir, ignore_patterns):
+    if not ignore_patterns:
+        return False
+    display_path = _relative_path(path, base_dir).as_posix()
+    return any(pattern.search(display_path) for pattern in ignore_patterns)
+
+
+def _iter_python_files(path, base_dir, ignore_patterns):
     if path.is_file():
-        if path.suffix == ".py":
+        if path.suffix == ".py" and not _should_ignore(path, base_dir, ignore_patterns):
             yield path
         return
 
@@ -54,14 +69,9 @@ def _iter_python_files(path):
     for candidate in sorted(path.rglob("*.py")):
         if any(part in IGNORED_DIR_NAMES for part in candidate.parts):
             continue
+        if _should_ignore(candidate, base_dir, ignore_patterns):
+            continue
         yield candidate
-
-
-def _relative_path(path, base_dir):
-    try:
-        return path.relative_to(base_dir)
-    except ValueError:
-        return path
 
 
 def scan_file(path):
@@ -77,15 +87,29 @@ def scan_file(path):
         if callee not in DISALLOWED_CALLEES:
             continue
 
-        line_text = source_lines[node.lineno - 1].strip() if node.lineno <= len(source_lines) else ""
+        line_text = (
+            source_lines[node.lineno - 1].strip()
+            if node.lineno <= len(source_lines)
+            else ""
+        )
 
         if callee in OS_SHELL_CALLEES:
-            findings.append((node.lineno, f"{callee[0]}.{callee[1]} is always shell-backed", line_text))
+            findings.append(
+                (
+                    node.lineno,
+                    f"{callee[0]}.{callee[1]} is always shell-backed",
+                    line_text,
+                )
+            )
 
         if any(_is_shell_true(keyword) for keyword in node.keywords):
             findings.append((node.lineno, "shell=True", line_text))
 
-        if node.args and callee in SUBPROCESS_CALLEES and _is_string_command(node.args[0]):
+        if (
+            node.args
+            and callee in SUBPROCESS_CALLEES
+            and _is_string_command(node.args[0])
+        ):
             findings.append((node.lineno, "string command instead of argv", line_text))
 
         if node.args and _is_dynamic_command(node.args[0]):
@@ -93,14 +117,16 @@ def scan_file(path):
     return findings
 
 
-def scan_paths(paths, base_dir=None):
+def scan_paths(paths, base_dir=None, ignore_patterns=None):
+    root = Path.cwd() if base_dir is None else Path(base_dir).resolve()
+    compiled_ignores = [re.compile(pattern) for pattern in (ignore_patterns or [])]
+
     files = []
     for path in paths:
-        files.extend(_iter_python_files(path.resolve()))
+        files.extend(_iter_python_files(path.resolve(), root, compiled_ignores))
 
     findings = []
     seen = set()
-    root = Path.cwd() if base_dir is None else Path(base_dir).resolve()
     for path in files:
         if path in seen:
             continue
